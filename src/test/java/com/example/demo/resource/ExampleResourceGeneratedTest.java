@@ -3,13 +3,18 @@ package com.example.demo.resource;
 
 import static io.github.kelari.atg.util.DataLoadUtil.*;
 
+import com.example.demo.matchers.IsJohnMatcher;
+import java.lang.Integer;
 import java.lang.Object;
 import java.lang.String;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +29,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import reactor.core.publisher.Mono;
 
 @SpringBootTest(
@@ -55,6 +61,25 @@ public class ExampleResourceGeneratedTest {
     return body;
   }
 
+  private static ExchangeFilterFunction logRequest() {
+    return ExchangeFilterFunction.ofRequestProcessor(request -> {
+            System.out.println("[REQUEST] → " + request.method() + " " + request.url());
+            request.headers().forEach((k, v) -> System.out.println("[HEADER] " + k + ": " + v));
+            request.cookies().forEach((k, v) -> System.out.println("[COOKIE] " + k + ": " + v));
+            // [BODY] Logging not implemented. Next release.
+            return Mono.just(request);
+        });
+  }
+
+  private static ExchangeFilterFunction logResponse() {
+    return ExchangeFilterFunction.ofResponseProcessor(response -> {
+            System.out.println("[RESPONSE] ← Status: " + response.statusCode());
+            response.headers().asHttpHeaders()
+                .forEach((k, v) -> System.out.println("[HEADER] " + k + ": " + v));
+            return Mono.just(response);
+        });
+  }
+
   @BeforeEach
   public void authenticate() {
     if ("/api/auth/login".isEmpty()) {
@@ -75,24 +100,46 @@ public class ExampleResourceGeneratedTest {
                        .value(token -> bearerToken = "Bearer " + token);
   }
 
-  @Test
-  @Order(1)
+  @RepeatedTest(5)
   @Timeout(5)
+  @Order(1)
   @DisplayName("✅ Should return 200 OK when 'id' is 200 and authenticated")
   public void getExample_200() {
+    WebTestClient client = this.webTestClient
+        	.mutate()
+        	.filter(logRequest())
+        	.filter(logResponse())
+        	.responseTimeout(Duration.ofSeconds(5))
+        	.build();
     Map<String, Object> data = getData("com.example.demo.data.GetExampleDataLoad200");
-    webTestClient
+    client
         	.get()
         	.uri("/api/example/" + safeString(data.get("id"))  + "?filter=" + safeString(data.get("filter")))
         	.header("X-Custom-Header", safeString(data.get("X-Custom-Header")))
         	.header("Authorization", bearerToken)
         	.exchange()
-        	.expectStatus().isOk();
+        	.expectStatus().isOk()
+        	.expectHeader().valueEquals("testName1", "testValue1", "testValue11")
+        	.expectHeader().valueEquals("testName2", "testValue2")
+        	.expectBody()
+        	.jsonPath("$.optionalField").value(Matchers.nullValue())
+        	.jsonPath("$.role").value(Matchers.not(Matchers.equalTo("Admin")))
+        	.jsonPath("$.name").value(Matchers.equalTo("John"))
+        	.jsonPath("$.score").value(Matchers.greaterThan(10))
+        	.jsonPath("$.limit").value(Matchers.lessThan(100))
+        	.jsonPath("$.message").value(Matchers.containsString("success"))
+        	.jsonPath("$.mandatoryField").value(Matchers.notNullValue())
+        	.jsonPath("$.username").value(Matchers.startsWith("user_"))
+        	.jsonPath("$.email").value(Matchers.endsWith(".com"))
+        	.jsonPath("$.roles").value(Matchers.hasItem("admin"))
+        	.jsonPath("$.age").value(Matchers.instanceOf(Integer.class))
+        	.jsonPath("$.grade").value(Matchers.anyOf(Matchers.equalTo("A"), Matchers.equalTo("B"), Matchers.equalTo("C")))
+        	.jsonPath("$.name").value(new IsJohnMatcher());
   }
 
   @Test
-  @Order(2)
   @Timeout(5)
+  @Order(2)
   @DisplayName("❌ Should return 400 Bad Request when 'id' is 400")
   public void getExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleDataLoad400");
@@ -106,8 +153,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(3)
   @Timeout(3)
+  @Order(3)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void getExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleDataLoad401");
@@ -120,8 +167,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(4)
   @Timeout(5)
+  @Order(4)
   @DisplayName("❌ Should return 404 Not Found when 'id' is 404")
   public void getExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleDataLoad404");
@@ -135,8 +182,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(5)
   @Timeout(5)
+  @Order(5)
   @DisplayName("❌ Should return 500 Internal Server Error for unhandled 'id'")
   public void getExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleDataLoad500");
@@ -150,8 +197,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(6)
   @Timeout(5)
+  @Order(6)
   @DisplayName("✅ Should return 201 Created when Example name is '201'")
   public void createExample_201() {
     Map<String, Object> data = getData("com.example.demo.data.CreateExampleDataLoad201");
@@ -168,8 +215,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(7)
   @Timeout(5)
+  @Order(7)
   @DisplayName("❌ Should return 400 Bad Request when Example name is '400'")
   public void createExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.CreateExampleDataLoad400");
@@ -186,8 +233,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(8)
   @Timeout(3)
+  @Order(8)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void createExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.CreateExampleDataLoad401");
@@ -203,8 +250,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(9)
   @Timeout(5)
+  @Order(9)
   @DisplayName("❌ Should return 404 Not Found when Example name is '404'")
   public void createExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.CreateExampleDataLoad404");
@@ -221,8 +268,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(10)
   @Timeout(5)
+  @Order(10)
   @DisplayName("❌ Should return 500 Internal Server Error when Example name is unexpected")
   public void createExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.CreateExampleDataLoad500");
@@ -239,8 +286,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(11)
   @Timeout(5)
+  @Order(11)
   @DisplayName("✅ Should return 200 OK when Example ID is 200")
   public void updateExample_200() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleDataLoad200");
@@ -256,8 +303,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(12)
   @Timeout(5)
+  @Order(12)
   @DisplayName("❌ Should return 400 Bad Request when Example ID is 400")
   public void updateExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleDataLoad400");
@@ -273,8 +320,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(13)
   @Timeout(3)
+  @Order(13)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void updateExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleDataLoad401");
@@ -289,8 +336,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(14)
   @Timeout(5)
+  @Order(14)
   @DisplayName("❌ Should return 404 Not Found when Example ID is 404")
   public void updateExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleDataLoad404");
@@ -306,8 +353,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(15)
   @Timeout(5)
+  @Order(15)
   @DisplayName("❌ Should return 500 Internal Server Error when Example ID is unexpected")
   public void updateExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleDataLoad500");
@@ -323,8 +370,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(16)
   @Timeout(5)
+  @Order(16)
   @DisplayName("✅ Should return 200 OK when Example ID is 200")
   public void patchExample_200() {
     Map<String, Object> data = getData("com.example.demo.data.PatchExampleDataLoad200");
@@ -340,8 +387,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(17)
   @Timeout(5)
+  @Order(17)
   @DisplayName("❌ Should return 400 Bad Request when Example ID is 400")
   public void patchExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.PatchExampleDataLoad400");
@@ -357,8 +404,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(18)
   @Timeout(3)
+  @Order(18)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void patchExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.PatchExampleDataLoad401");
@@ -373,8 +420,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(19)
   @Timeout(5)
+  @Order(19)
   @DisplayName("❌ Should return 404 Not Found when Example ID is 404")
   public void patchExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.PatchExampleDataLoad404");
@@ -390,8 +437,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(20)
   @Timeout(5)
+  @Order(20)
   @DisplayName("❌ Should return 500 Internal Server Error when Example ID is unexpected")
   public void patchExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.PatchExampleDataLoad500");
@@ -407,8 +454,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(21)
   @Timeout(5)
+  @Order(21)
   @DisplayName("✅ Should return 204 No Content when Example ID is 204")
   public void deleteExample_204() {
     Map<String, Object> data = getData("com.example.demo.data.DeleteExampleDataLoad204");
@@ -421,8 +468,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(22)
   @Timeout(5)
+  @Order(22)
   @DisplayName("❌ Should return 400 Bad Request when Example ID is 400")
   public void deleteExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.DeleteExampleDataLoad400");
@@ -435,8 +482,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(23)
   @Timeout(3)
+  @Order(23)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void deleteExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.DeleteExampleDataLoad401");
@@ -448,8 +495,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(24)
   @Timeout(5)
+  @Order(24)
   @DisplayName("❌ Should return 404 Not Found when Example ID is 404")
   public void deleteExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.DeleteExampleDataLoad404");
@@ -462,8 +509,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(25)
   @Timeout(5)
+  @Order(25)
   @DisplayName("❌ Should return 500 Internal Server Error when Example ID is unexpected")
   public void deleteExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.DeleteExampleDataLoad500");
@@ -476,8 +523,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(26)
   @Timeout(5)
+  @Order(26)
   @DisplayName("✅ Should return 200 OK when name is '200' and file is uploaded successfully")
   public void uploadExample_200() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleUploadDataLoad200");
@@ -492,8 +539,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(27)
   @Timeout(5)
+  @Order(27)
   @DisplayName("❌ Should return 400 Bad Request when name is '400' (invalid input)")
   public void uploadExample_400() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleUploadDataLoad400");
@@ -507,8 +554,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(28)
   @Timeout(3)
+  @Order(28)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void uploadExample_401() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleUploadDataLoad401");
@@ -522,8 +569,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(29)
   @Timeout(5)
+  @Order(29)
   @DisplayName("❌ Should return 404 Not Found when name is '404' and resource does not exist")
   public void uploadExample_404() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleUploadDataLoad404");
@@ -538,8 +585,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(30)
   @Timeout(5)
+  @Order(30)
   @DisplayName("❌ Should return 500 Internal Server Error for unknown name")
   public void uploadExample_500() {
     Map<String, Object> data = getData("com.example.demo.data.UpdateExampleUploadDataLoad500");
@@ -554,8 +601,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(31)
   @Timeout(5)
+  @Order(31)
   @DisplayName("✅ Should return 200 OK when color matrix variable is '200'")
   public void getExampleWithMatrix_200() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithMatrixDataLoad200");
@@ -568,8 +615,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(32)
   @Timeout(5)
+  @Order(32)
   @DisplayName("❌ Should return 400 Bad Request when color matrix variable is '400'")
   public void getExampleWithMatrix_400() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithMatrixDataLoad400");
@@ -582,8 +629,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(33)
   @Timeout(3)
+  @Order(33)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void getExampleWithMatrix_401() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithMatrixDataLoad401");
@@ -595,8 +642,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(34)
   @Timeout(5)
+  @Order(34)
   @DisplayName("❌ Should return 404 Not Found when color matrix variable is '404'")
   public void getExampleWithMatrix_404() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithMatrixDataLoad404");
@@ -609,8 +656,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(35)
   @Timeout(5)
+  @Order(35)
   @DisplayName("❌ Should return 500 Internal Server Error when color matrix variable is unexpected")
   public void getExampleWithMatrix_500() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithMatrixDataLoad500");
@@ -623,8 +670,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(36)
   @Timeout(5)
+  @Order(36)
   @DisplayName("✅ Should return 200 OK when ID is 200 and Authorization is present")
   public void getExampleWithCookie_200() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithCookieDataLoad200");
@@ -639,8 +686,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(37)
   @Timeout(5)
+  @Order(37)
   @DisplayName("❌ Should return 400 Bad Request when ID is 400")
   public void getExampleWithCookie_400() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithCookieDataLoad400");
@@ -655,8 +702,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(38)
   @Timeout(3)
+  @Order(38)
   @DisplayName("🛡️ Should return 401 Unauthorized when Authorization header is missing")
   public void getExampleWithCookie_401() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithCookieDataLoad401");
@@ -670,8 +717,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(39)
   @Timeout(5)
+  @Order(39)
   @DisplayName("❌ Should return 404 Not Found when ID is 404")
   public void getExampleWithCookie_404() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithCookieDataLoad404");
@@ -686,8 +733,8 @@ public class ExampleResourceGeneratedTest {
   }
 
   @Test
-  @Order(40)
   @Timeout(5)
+  @Order(40)
   @DisplayName("❌ Should return 500 Internal Server Error when ID is not handled")
   public void getExampleWithCookie_500() {
     Map<String, Object> data = getData("com.example.demo.data.GetExampleWithCookieDataLoad500");

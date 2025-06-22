@@ -24,8 +24,8 @@ public class AuthControllerGeneratedTest {
   private WebTestClient webTestClient;
 
   @Test
-  @Order(1)
   @Timeout(5)
+  @Order(1)
   @DisplayName("✅ Should return 200 OK with a token when valid credentials are provided")
   public void login_200() {
     Map<String, Object> data = getData("com.example.demo.data.LoginDataLoad200");
@@ -40,8 +40,8 @@ public class AuthControllerGeneratedTest {
   }
 
   @Test
-  @Order(2)
   @Timeout(3)
+  @Order(2)
   @DisplayName("🛡️ Should return 401 Unauthorized when invalid credentials are provided")
   public void login_401() {
     Map<String, Object> data = getData("com.example.demo.data.LoginDataLoad401");
