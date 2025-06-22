@@ -1,12 +1,13 @@
 package com.example.demo.resource;
 
+import com.example.demo.matchers.IsJohnMatcher;
+import com.example.demo.model.DataResponse;
 import com.example.demo.model.ExampleRequest;
 import com.example.demo.model.UploadRequest;
-import io.github.kelari.atg.annotation.ApiTestCase;
-import io.github.kelari.atg.annotation.ApiTestSpec;
-import io.github.kelari.atg.annotation.KelariGenerateApiTest;
+import io.github.kelari.atg.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,7 +37,40 @@ public class ExampleResource {
                 timeout = 5,
                 expectedStatusCode = HttpURLConnection.HTTP_OK,
                 dataProviderClassName = "com.example.demo.data.GetExampleDataLoad200",
-                requiresAuth = true
+                requiresAuth = true,
+                repeat = 5,
+                enableLogging = true,
+                responseTimeoutSeconds = 5,
+                expectedHeaders = {@Header(name = "testName1", value = {"testValue1", "testValue11"}),
+                                   @Header(name = "testName2", value = "testValue2")},
+                jsonPaths = {
+                        // EQUAL_TO: o valor retornado deve ser exatamente "John"
+                        @JsonPath(path = "$.name", type = MatcherType.EQUAL_TO, value = "John"),
+                        // NULL_VALUE: espera que o valor seja null
+                        @JsonPath(path = "$.optionalField", type = MatcherType.NULL_VALUE),
+                        // NOT_NULL_VALUE: espera que o campo não seja null
+                        @JsonPath(path = "$.mandatoryField", type = MatcherType.NOT_NULL_VALUE),
+                        // NOT: nega o valor (ex: não deve ser "Admin")
+                        @JsonPath(path = "$.role", type = MatcherType.NOT, value = "Admin"),
+                        // INSTANCE_OF: espera que o valor seja do tipo Integer
+                        @JsonPath(path = "$.age", type = MatcherType.INSTANCE_OF, value = "java.lang.Integer"),
+                        // GREATER_THAN: espera que o valor seja maior que 10
+                        @JsonPath(path = "$.score", type = MatcherType.GREATER_THAN, value = "10"),
+                        // LESS_THAN: espera que o valor seja menor que 100
+                        @JsonPath(path = "$.limit", type = MatcherType.LESS_THAN, value = "100"),
+                        // CONTAINS_STRING: espera que o valor contenha a substring "success"
+                        @JsonPath(path = "$.message", type = MatcherType.CONTAINS_STRING, value = "success"),
+                        // STARTS_WITH: espera que o valor comece com "user_"
+                        @JsonPath(path = "$.username", type = MatcherType.STARTS_WITH, value = "user_"),
+                        // ENDS_WITH: espera que o valor termine com ".com"
+                        @JsonPath(path = "$.email", type = MatcherType.ENDS_WITH, value = ".com"),
+                        // ANY_OF: espera que o valor seja qualquer um da lista ["A", "B", "C"]
+                        @JsonPath(path = "$.grade", type = MatcherType.ANY_OF, value = "A,B,C"),
+                        // CONTAINS: espera que a lista contenha "admin"
+                        @JsonPath(path = "$.roles", type = MatcherType.HAS_ITEM, value = "admin"),
+                        // CUSTOM_CLASS: matcher Java personalizado
+                        @JsonPath(path = "$.name", type = MatcherType.CUSTOM_CLASS, matcherClass = IsJohnMatcher.class)
+                }
             ),
             @ApiTestCase(
                 displayName = "❌ Should return 400 Bad Request when 'id' is 400",
@@ -74,7 +108,7 @@ public class ExampleResource {
     )
     // GET com @PathVariable e @RequestParam
     @GetMapping("/{id}")
-    public ResponseEntity<String> getExample(
+    public ResponseEntity<DataResponse> getExample(
             @PathVariable("id") Long id,
             @RequestParam(required = false) String filter,
             @RequestHeader(value = "X-Custom-Header", required = false) String customHeader) {
@@ -82,16 +116,21 @@ public class ExampleResource {
         System.out.println("Token received: "+ httpServletRequest.getHeader("Authorization"));
         System.out.println("INPUT -> GET: id=" + id + ", filter=" + filter + ", header=" + customHeader);
 
-        if(id == 200)
-            return ResponseEntity.ok("getExample");
-        else if (id == 400)
-            return ResponseEntity.status(400).body("Bad request");
+        if (id == 200) {
+            // Retorna com headers personalizados
+            return ResponseEntity
+                    .ok()
+                    .header("testName1", "testValue1", "testValue11")
+                    .header("testName2", "testValue2")
+                    .body(DataResponse.createExample());
+        }else if (id == 400)
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
          else if(Objects.isNull(httpServletRequest.getHeader("Authorization")))
-            return ResponseEntity.status(401).body("Authorization header missing or invalid.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
          else if(id==404)
-            return ResponseEntity.status(404).body("Not found.");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         else
-            return ResponseEntity.status(500).body("Internal error.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
 
     @ApiTestSpec(
